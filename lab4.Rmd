@@ -1,0 +1,97 @@
+---
+title: "Lab 4"
+author: "Maximov Evgeny"
+date: '20 апреля 2018 г '
+output: html_document
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#init
+
+library('R.utils')
+library('maptools')
+require('rgdal') 
+require('plyr')   
+library('scales')
+library('ggplot2')
+library('gpclib')
+library('mapproj')
+
+```
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+# загружаем статистику с показателями по регионам
+#ссылка на данные: http://www.gks.ru/bgd/regl/B16_14p/IssWWW.exe/Stg/d01/09-03.doc
+
+fileURL = "vod.csv"
+stat.Regions <- read.csv(fileURL, sep = '\t', as.is = T, encoding = 'UTF-8', dec = ',')
+
+ShapeFileURL <- "http://biogeo.ucdavis.edu/data/gadm2.8/shp/RUS_adm_shp.zip"
+if(!file.exists('./data')){
+  dir.create('./data')
+}
+if(!file.exists('./data/RUS_adm_shp.zip')) {
+  download.file(ShapeFileURL, destfile = './data/RUS_adm_shp.zip')
+}
+# распаковать архив
+unzip('./data/RUS_adm_shp.zip', exdir = './data/RUS_adm_shp')
+
+
+# Формируем данные для ggplot
+# читаем ShapeFile из папки, с указанием уровня иерархии
+Regions <- readOGR(dsn = './data/RUS_adm_shp', # папка
+                   layer = 'RUS_adm1') # уровень
+
+# делаем фактор из имён областей (т.е. нумеруем их)
+Regions@data$VARNAME_1 <- as.factor(Regions@data$VARNAME_1 )
+stat.Regions$VARNAME_1 <- stat.Regions$region_Eng
+Regions@data <- join(Regions@data, stat.Regions[, c('VARNAME_1',
+                                                    'znach')],
+                     by = 'VARNAME_1')
+
+# преобразовать SpatialPolygonsDataFrame в data.frame
+gpclibPermit()
+Regions.points <- fortify(Regions, region = 'VARNAME_1')
+# добавить к координатам сведения о регионах
+Regions@data$id <- Regions@data$VARNAME_1
+Regions.df <- join(Regions.points, Regions@data, by = 'id')
+# добавляем к координатам значения показателя для заливки
+#  (численность населения из фрейма stat.Regions)
+stat.Regions$id <- stat.Regions$region_Eng
+
+# координаты центров полигонов (для подписей регионов)
+centroids.df <- as.data.frame(coordinates(Regions))
+# названия регионов (идут в том же порядке, в каком
+# считались центроиды
+centroids.df$id <- Regions@data$ID_1
+# заменяем имена переменных, созданные по умолчанию
+colnames(centroids.df) <- c('long', 'lat', 'id')
+
+Regions.df <- join(Regions.df, 
+                   stat.Regions[, c('id', 'znach')], 
+                   by = 'id')
+
+```
+
+
+График использования свежей воды по Российской федерации за 2013 год по регионам
+```{r, echo=FALSE}
+
+# создаём график
+gp <- ggplot() + 
+  geom_polygon(data = Regions.df, 
+               aes(long, lat, group = group, fill = znach)) +
+  geom_path(data = Regions.df, 
+            aes(long, lat, group = group),
+            color = 'coral4') +
+  coord_map(projection = 'gilbert', orientation = c(90, 0, 100)) +
+  scale_fill_distiller(palette = 'OrRd',
+                       direction = 1,
+                       breaks = pretty_breaks(n = 5)) +
+  labs(x = 'Долгота', y = 'Широта', 
+       title = "Использование свежей воды по Российской Федерации за 2013 год")
+
+# выводим график
+gp
+
+```
