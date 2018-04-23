@@ -1,0 +1,63 @@
+library('R.utils')
+library('maptools')
+require('rgdal') 
+require('plyr')   
+library('scales')
+library('ggplot2')
+library('gpclib')
+library('mapproj')
+
+#ссылка на данные: http://www.gks.ru/bgd/regl/B16_14p/IssWWW.exe/Stg/d01/09-03.doc
+
+fileURL <- 'vod.csv'
+stat.Regions <- read.csv(fileURL, sep = ';', dec = ',', stringsAsFactors = F, encoding = 'UTF-8')
+
+#  читаем ShapeFile из папки, с указанием уровня
+Regions <- readOGR(dsn = './data/Rus_adm_shp',   # папка с файлами .shp,...
+                   layer = 'RUS_adm1')           # уровень иерархии
+
+# делаем фактор из имён областей (т.е. нумеруем их)
+Regions@data$VARNAME_1 <- as.factor(Regions@data$VARNAME_1 )
+stat.Regions$VARNAME_1 <- stat.Regions$region_Eng
+Regions@data <- join(Regions@data, stat.Regions[, c('VARNAME_1',
+                                                    'znach')],
+                     by = 'VARNAME_1')
+
+# преобразовать SpatialPolygonsDataFrame в data.frame
+gpclibPermit()
+Regions.points <- fortify(Regions, region = 'VARNAME_1')
+# добавить к координатам сведения о регионах
+Regions@data$id <- Regions@data$VARNAME_1
+Regions.df <- join(Regions.points, Regions@data, by = 'id')
+# добавляем к координатам значения показателя для заливки
+#  (численность населения из фрейма stat.Regions)
+stat.Regions$id <- stat.Regions$region_Eng
+
+# координаты центров полигонов (для подписей регионов)
+centroids.df <- as.data.frame(coordinates(Regions))
+# названия регионов (идут в том же порядке, в каком
+# считались центроиды
+centroids.df$id <- Regions@data$ID_1
+# заменяем имена переменных, созданные по умолчанию
+colnames(centroids.df) <- c('long', 'lat', 'id')
+
+Regions.df <- join(Regions.df, 
+                   stat.Regions[, c('id', 'znach')], 
+                   by = 'id')
+# создаём график
+gp <- ggplot() + 
+  geom_polygon(data = Regions.df, 
+               aes(long, lat, group = group, fill = znach)) +
+  geom_path(data = Regions.df, 
+            aes(long, lat, group = group),
+            color = 'coral4') +
+  coord_map(projection = 'gilbert', orientation = c(90, 0, 100)) +
+  scale_fill_distiller(palette = 'OrRd',
+                       direction = 1,
+                       breaks = pretty_breaks(n = 5)) +
+  labs(x = 'Долгота', y = 'Широта', 
+       title = "Использование свежей воды по Российской Федерации за 2013 год")
+#geom_text(data = centroids.df, 
+#                   aes(long, lat, label = id))
+# выводим график
+gp
