@@ -23,8 +23,8 @@ library('mapproj')
 # загружаем статистику с показателями по регионам
 #ссылка на данные: http://www.gks.ru/bgd/regl/B16_14p/IssWWW.exe/Stg/d01/09-03.doc
 
-fileURL = "vod.csv"
-stat.Regions <- read.csv(fileURL, sep = '\t', as.is = T, encoding = 'UTF-8', dec = ',')
+fileURL = 'vod.csv'
+stat.Regions <- read.csv(fileURL, sep = ';', dec = ',', stringsAsFactors = F, encoding = 'UTF-8')
 
 ShapeFileURL <- "http://biogeo.ucdavis.edu/data/gadm2.8/shp/RUS_adm_shp.zip"
 if(!file.exists('./data')){
@@ -39,8 +39,8 @@ unzip('./data/RUS_adm_shp.zip', exdir = './data/RUS_adm_shp')
 
 # Формируем данные для ggplot
 # читаем ShapeFile из папки, с указанием уровня иерархии
-Regions <- readOGR(dsn = './data/RUS_adm_shp', # папка
-                   layer = 'RUS_adm1') # уровень
+Regions <- readOGR(dsn = './data/Rus_adm_shp',   # папка с файлами .shp,...
+                   layer = 'RUS_adm1')           # уровень иерархии
 
 # делаем фактор из имён областей (т.е. нумеруем их)
 Regions@data$VARNAME_1 <- as.factor(Regions@data$VARNAME_1 )
@@ -93,5 +93,3 @@ gp <- ggplot() +
 
 # выводим график
 gp
-
-```
